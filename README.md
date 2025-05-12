@@ -20,3 +20,8 @@ Para el manejo de datos en formato JSON se implementa la librería GSON que perm
 - Mapeo automático entre modelos de datos y representación JSON
 - Manejo de tipos complejos y anidados
 - Configuración personalizada de conversiones
+
+## 👨‍💻 Autores
+
+- Manuel Mora Sandi
+- Victor Quesada Rodriguez
