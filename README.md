@@ -1,6 +1,6 @@
 # Sistema de Gestión Académica Universitaria - API
 
-Este proyecto es una API desarrollada en Kotlin para gestionar el app llamado Banner. Proporciona endpoints para manejar carreras, cursos, profesores, alumnos, ciclos lectivos y procesos de matrícula.
+Este proyecto es una API desarrollada en Kotlin para gestionar el app llamado Banner https://github.com/Manuel01011/Banner . Proporciona endpoints para manejar carreras, cursos, profesores, alumnos, ciclos lectivos y procesos de matrícula.
 
 
 ## Tecnologías utilizadas
