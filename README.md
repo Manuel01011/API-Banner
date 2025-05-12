@@ -1,3 +1,7 @@
+# Sistema de Gestión Académica Universitaria - API
+
+Este proyecto es una API desarrollada en Kotlin para gestionar el sistema académico de una universidad. Proporciona endpoints para manejar carreras, cursos, profesores, alumnos, ciclos lectivos y procesos de matrícula.
+
 ## Características principales
 
 - **Gestión completa de la estructura académica** (carreras, cursos)
