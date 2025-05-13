@@ -2,7 +2,9 @@ package com.example.banner.backend
 import com.example.backend_banner.backend.Models.Career_
 import com.example.backend_banner.backend.Controllers.CareerController
 import com.example.backend_banner.backend.Controllers.CicloController
+import com.example.backend_banner.backend.Controllers.CourseController
 import com.example.backend_banner.backend.Models.Ciclo_
+import com.example.backend_banner.backend.Models.Course_
 import com.google.gson.Gson
 import java.net.ServerSocket
 import java.net.Socket
@@ -12,6 +14,7 @@ class SimpleHttpServer(private val port: Int) {
     private val gson = Gson()
     private val careerController = CareerController()
     private val cicloController = CicloController()
+    private val courseController = CourseController()
 
     fun start() {
         Thread {
@@ -109,6 +112,21 @@ class SimpleHttpServer(private val port: Int) {
                 }
                 path.equals("/api/ciclos", ignoreCase = true) && method == "POST" -> {
                     handleCreateCiclo(writer, body)
+                }
+
+                //Rutas para la entidad "cursos"
+                path.equals("/api/courses", ignoreCase = true) && method == "GET" -> {
+                    handleGetCourses(writer)
+                }
+                path.startsWith("/api/courses/") && method == "DELETE" -> {
+                    val id = path.removePrefix("/api/courses/").toIntOrNull()
+                    handleDeleteCourse(writer, id)
+                }
+                path.equals("/api/courses", ignoreCase = true) && method == "POST" -> {
+                    handleCreateCourse(writer, body)
+                }
+                path.equals("/api/courses", ignoreCase = true) && method == "PUT" -> {
+                    handleUpdateCourse(writer, body)
                 }
 
 
@@ -229,7 +247,7 @@ class SimpleHttpServer(private val port: Int) {
             sendErrorResponse(writer, "Datos inválidos")
         }
     }
-   // ---------------------------Fin del manejo de solicitudes de la entidad "carreras"-------------------------
+    // ---------------------------Fin del manejo de solicitudes de la entidad "carreras"-------------------------
 
 
     // -------------------------Manejo de solicitudes de la entidad "ciclos"-------------------------
@@ -300,10 +318,122 @@ class SimpleHttpServer(private val port: Int) {
             writer.flush()
         }
     }
-
-
     // ---------------------------Fin del manejo de solicitudes de la entidad "ciclos"-------------------------
 
+
+    // -------------------------Manejo de solicitudes de la entidad "cursos"-------------------------
+    private fun handleGetCourses(writer: PrintWriter) {
+        val courses = courseController.getAllCourses()
+        val response = mapOf(
+            "status" to "success",
+            "data" to courses
+        )
+        sendJsonResponse(writer, response)
+    }
+    private fun handleDeleteCourse(writer: PrintWriter, id: Int?) {
+        if (id == null) {
+            sendErrorResponse(writer, "ID inválido")
+            return
+        }
+        val success = courseController.deleteCourse(id)
+        if (success) {
+            sendJsonResponse(writer, mapOf("success" to true))
+        } else {
+            sendErrorResponse(writer, "Error al eliminar curso")
+        }
+    }
+    private fun handleCreateCourse(writer: PrintWriter, body: String) {
+        try {
+            println("Received POST request with body: $body")
+            val course = gson.fromJson(body, Course_::class.java)
+            println("Inserting course: ${course.cod}, ${course.name}")
+
+            val success = courseController.insertCourse(
+                course.cod,
+                course.name,
+                course.credits,
+                course.hours,
+                course.cicloId,
+                course.careerCod
+            )
+
+            val response = """
+            HTTP/1.1 ${if (success) 200 else 400}
+            Content-Type: application/json
+            Access-Control-Allow-Origin: *
+            Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE
+            Access-Control-Allow-Headers: Content-Type
+            Connection: close
+            
+            ${gson.toJson(mapOf(
+                "success" to success,
+                "cod" to course.cod,
+                "name" to course.name
+            ))}
+        """.trimIndent()
+
+            writer.println(response)
+            writer.flush()
+
+        } catch (e: Exception) {
+            println("Error in handleCreateCourse: ${e.message}")
+            val errorResponse = """
+            HTTP/1.1 400
+            Content-Type: application/json
+            
+            {"error":"Invalid data format"}
+        """.trimIndent()
+            writer.println(errorResponse)
+            writer.flush()
+        }
+    }
+
+    private fun handleUpdateCourse(writer: PrintWriter, body: String) {
+        try {
+            println("Received PUT request with body: $body")
+            val course = gson.fromJson(body, Course_::class.java)
+            println("Updating course: ${course.cod}, ${course.name}")
+
+            val success = courseController.updateCourse(
+                course.cod,
+                course.name,
+                course.credits,
+                course.hours,
+                course.cicloId,
+                course.careerCod
+            )
+
+            val response = """
+            HTTP/1.1 ${if (success) 200 else 400}
+            Content-Type: application/json
+            Access-Control-Allow-Origin: *
+            Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE
+            Access-Control-Allow-Headers: Content-Type
+            Connection: close
+            
+            ${gson.toJson(mapOf(
+                "success" to success,
+                "cod" to course.cod,
+                "name" to course.name
+            ))}
+        """.trimIndent()
+
+            writer.println(response)
+            writer.flush()
+
+        } catch (e: Exception) {
+            println("Error in handleUpdateCourse: ${e.message}")
+            val errorResponse = """
+            HTTP/1.1 400
+            Content-Type: application/json
+            
+            {"error":"Invalid data format"}
+        """.trimIndent()
+            writer.println(errorResponse)
+            writer.flush()
+        }
+    }
+    // ---------------------------Fin del manejo de solicitudes de la entidad "cursos"-------------------------
 
 
     private fun sendJsonResponse(writer: PrintWriter, data: Any) {
