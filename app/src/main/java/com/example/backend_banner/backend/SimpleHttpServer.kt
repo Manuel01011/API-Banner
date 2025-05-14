@@ -3,8 +3,10 @@ import com.example.backend_banner.backend.Models.Career_
 import com.example.backend_banner.backend.Controllers.CareerController
 import com.example.backend_banner.backend.Controllers.CicloController
 import com.example.backend_banner.backend.Controllers.CourseController
+import com.example.backend_banner.backend.Controllers.EnrollmentController
 import com.example.backend_banner.backend.Models.Ciclo_
 import com.example.backend_banner.backend.Models.Course_
+import com.example.backend_banner.backend.Models.Enrollment_
 import com.google.gson.Gson
 import java.net.ServerSocket
 import java.net.Socket
@@ -15,6 +17,7 @@ class SimpleHttpServer(private val port: Int) {
     private val careerController = CareerController()
     private val cicloController = CicloController()
     private val courseController = CourseController()
+    private val enrollmentController = EnrollmentController()
 
     fun start() {
         Thread {
@@ -128,7 +131,30 @@ class SimpleHttpServer(private val port: Int) {
                 path.equals("/api/courses", ignoreCase = true) && method == "PUT" -> {
                     handleUpdateCourse(writer, body)
                 }
+                path.equals("/api/enrollments", ignoreCase = true) && method == "POST" -> {
+                    handleCreateEnrollment(writer, body)
+                }
 
+                //Rutas para la entidad "matriculas"
+                path.equals("/api/enrollments", ignoreCase = true) && method == "GET" -> {
+                    handleGetEnrollments(writer)
+                }
+                path.startsWith("/api/enrollments/") && method == "DELETE" -> {
+                    val parts = path.removePrefix("/api/enrollments/").split("/")
+                    if (parts.size == 2) {
+                        val studentId = parts[0].toIntOrNull()
+                        val grupoId = parts[1].toIntOrNull()
+                        handleDeleteEnrollment(writer, studentId, grupoId)
+                    } else {
+                        sendErrorResponse(writer, "Formato de URL inválido")
+                    }
+                }
+                path.equals("/api/enrollments", ignoreCase = true) && method == "POST" -> {
+                    handleCreateEnrollment(writer, body)
+                }
+                path.equals("/api/enrollments", ignoreCase = true) && method == "PUT" -> {
+                    handleUpdateEnrollment(writer, body)
+                }
 
                 else -> {
                     writer.println("HTTP/1.1 404 Not Found")
@@ -435,6 +461,149 @@ class SimpleHttpServer(private val port: Int) {
     }
     // ---------------------------Fin del manejo de solicitudes de la entidad "cursos"-------------------------
 
+    // -------------------------Manejo de solicitudes de la entidad "matriculas"-------------------------
+    private fun handleGetEnrollments(writer: PrintWriter) {
+        val enrollments = enrollmentController.getAllEnrollments()
+        val response = mapOf(
+            "status" to "success",
+            "data" to enrollments
+        )
+        sendJsonResponse(writer, response)
+    }
+
+    private fun handleDeleteEnrollment(writer: PrintWriter, studentId: Int?, grupoId: Int?) {
+        if (studentId == null || grupoId == null) {
+            sendErrorResponse(writer, "Invalid id")
+            return
+        }
+        try {
+            val success = enrollmentController.deleteEnrollment(studentId, grupoId)
+            if (success) {
+                sendJsonResponse(writer, mapOf("success" to true))
+            } else {
+                sendErrorResponse(writer, "Error deleting the enrollment")
+            }
+        } catch (e: Exception) {
+            sendErrorResponse(writer, "Error interno del servidor: ${e.message}")
+        }
+    }
+
+    private fun handleCreateEnrollment(writer: PrintWriter, body: String) {
+        try {
+            val enrollment = gson.fromJson(body, Enrollment_::class.java)
+
+            val success = enrollmentController.insertEnrollment(
+                enrollment.studentId,
+                enrollment.grupoId,
+                enrollment.grade
+            )
+
+
+            val response = """
+            HTTP/1.1 ${if (success) 200 else 400}
+            Content-Type: application/json
+            Access-Control-Allow-Origin: *
+            Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE
+            Access-Control-Allow-Headers: Content-Type
+            Connection: close
+            
+            ${gson.toJson(mapOf(
+                "success" to success,
+                "message" to if (success) "Enrollment successfully created" else "Error al crear matrícula",
+                "data" to enrollment
+            ))}
+        """.trimIndent()
+
+            writer.println(response)
+            writer.flush()
+
+        } catch (e: Exception) {
+            val errorResponse = """
+            HTTP/1.1 500
+            Content-Type: application/json
+            
+            ${gson.toJson(mapOf(
+                "error" to "Internal server error",
+                "message" to e.message
+            ))}
+        """.trimIndent()
+            writer.println(errorResponse)
+            writer.flush()
+        }
+    }
+
+    private fun handleUpdateEnrollment(writer: PrintWriter, body: String) {
+        try {
+            println("Raw body received: $body")
+            val enrollment = gson.fromJson(body, Enrollment_::class.java)
+            println("Parsed enrollment: StudentID=${enrollment.studentId}, GrupoID=${enrollment.grupoId}, Grade=${enrollment.grade}")
+
+            val success = enrollmentController.updateStudentGrade(
+                enrollment.studentId,
+                enrollment.grupoId,
+                enrollment.grade
+            )
+
+            println("Update operation result: $success")
+
+            // Respuesta más consistente
+            val response = if (success) {
+                """
+            HTTP/1.1 200 OK
+            Content-Type: application/json
+            Access-Control-Allow-Origin: *
+            Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE
+            Access-Control-Allow-Headers: Content-Type
+            Connection: close
+            
+            ${gson.toJson(mapOf(
+                    "success" to true,
+                    "message" to "Enrollment updated successfully",
+                    "data" to enrollment
+                ))}
+            """.trimIndent()
+            } else {
+                """
+            HTTP/1.1 400 Bad Request
+            Content-Type: application/json
+            Access-Control-Allow-Origin: *
+            Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE
+            Access-Control-Allow-Headers: Content-Type
+            Connection: close
+            
+            ${gson.toJson(mapOf(
+                    "success" to false,
+                    "error" to "Failed to update enrollment"
+                ))}
+            """.trimIndent()
+            }
+
+            writer.println(response)
+            writer.flush()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            val errorResponse = """
+            HTTP/1.1 500 Internal Server Error
+            Content-Type: application/json
+            Access-Control-Allow-Origin: *
+            Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE
+            Access-Control-Allow-Headers: Content-Type
+            Connection: close
+            
+            ${gson.toJson(mapOf(
+                "success" to false,
+                "error" to "Internal server error: ${e.message}",
+                "stackTrace" to e.stackTraceToString()
+            ))}
+        """.trimIndent()
+            writer.println(errorResponse)
+            writer.flush()
+        }
+    }
+
+
+   // ---------------------------Fin del manejo de solicitudes de la entidad "matriculas"-------------------------
+
 
     private fun sendJsonResponse(writer: PrintWriter, data: Any) {
         writer.println("HTTP/1.1 200 OK")
@@ -453,4 +622,5 @@ class SimpleHttpServer(private val port: Int) {
         writer.println()
         writer.println(gson.toJson(mapOf("error" to message)))
     }
+
 }
