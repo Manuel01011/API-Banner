@@ -35,8 +35,8 @@ class CicloController {
         val procedureName = "insert_ciclo"
         return DatabaseDAO.executeStoredProcedure(procedureName, id, year, number, dateStart, dateFinish)
     }
-    fun updateCiclo(id: Int, year: Int, number: Int, dateStart: String, dateFinish: String): Boolean {
-        return DatabaseDAO.executeStoredProcedure("update_ciclo", id, year, number, dateStart, dateFinish)
+    fun updateCiclo(id: Int, year: Int, number: Int, dateStart: String, dateFinish: String, isActive: Boolean): Boolean {
+        return DatabaseDAO.executeStoredProcedure("update_ciclo", id, year, number, dateStart, dateFinish,isActive)
     }
 
     fun deleteCiclo(id: Int): Boolean {

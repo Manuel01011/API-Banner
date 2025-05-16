@@ -4,10 +4,14 @@ import com.example.backend_banner.backend.Controllers.CareerController
 import com.example.backend_banner.backend.Controllers.CicloController
 import com.example.backend_banner.backend.Controllers.CourseController
 import com.example.backend_banner.backend.Controllers.EnrollmentController
+import com.example.backend_banner.backend.Controllers.GrupoController
 import com.example.backend_banner.backend.Models.Ciclo_
 import com.example.backend_banner.backend.Models.Course_
 import com.example.backend_banner.backend.Models.Enrollment_
+import com.example.backend_banner.backend.Models.Grupo_
 import com.google.gson.Gson
+import org.json.JSONException
+import org.json.JSONObject
 import java.net.ServerSocket
 import java.net.Socket
 import java.io.*
@@ -18,6 +22,7 @@ class SimpleHttpServer(private val port: Int) {
     private val cicloController = CicloController()
     private val courseController = CourseController()
     private val enrollmentController = EnrollmentController()
+    private val groupController = GrupoController()
 
     fun start() {
         Thread {
@@ -116,6 +121,9 @@ class SimpleHttpServer(private val port: Int) {
                 path.equals("/api/ciclos", ignoreCase = true) && method == "POST" -> {
                     handleCreateCiclo(writer, body)
                 }
+                path.equals("/api/ciclos", ignoreCase = true) && method == "PUT" -> {
+                    handleUpdateCiclo(writer, body)
+                }
 
                 //Rutas para la entidad "cursos"
                 path.equals("/api/courses", ignoreCase = true) && method == "GET" -> {
@@ -130,9 +138,6 @@ class SimpleHttpServer(private val port: Int) {
                 }
                 path.equals("/api/courses", ignoreCase = true) && method == "PUT" -> {
                     handleUpdateCourse(writer, body)
-                }
-                path.equals("/api/enrollments", ignoreCase = true) && method == "POST" -> {
-                    handleCreateEnrollment(writer, body)
                 }
 
                 //Rutas para la entidad "matriculas"
@@ -155,6 +160,23 @@ class SimpleHttpServer(private val port: Int) {
                 path.equals("/api/enrollments", ignoreCase = true) && method == "PUT" -> {
                     handleUpdateEnrollment(writer, body)
                 }
+
+                //Ruta para la entidad Group
+                path.equals("/api/groups", ignoreCase = true) && method == "GET" -> {
+                    handleGetGroups(writer)
+                }
+                path.startsWith("/api/groups/") && method == "DELETE" -> {
+                    val id = path.removePrefix("/api/groups/").toIntOrNull()
+                    handleDeleteGroup(writer, id)
+                }
+                path.equals("/api/groups", ignoreCase = true) && method == "POST" -> {
+                    handleCreateGroup(writer, body)
+                }
+                path.equals("/api/groups", ignoreCase = true) && method == "PUT" -> {
+                    handleUpdateGroup(writer, body)
+                }
+
+
 
                 else -> {
                     writer.println("HTTP/1.1 404 Not Found")
@@ -339,6 +361,55 @@ class SimpleHttpServer(private val port: Int) {
             Content-Type: application/json
             
             {"error":"Invalid data format"}
+        """.trimIndent()
+            writer.println(errorResponse)
+            writer.flush()
+        }
+    }
+
+    private fun handleUpdateCiclo(writer: PrintWriter, body: String) {
+        try {
+            println("Received PUT request with body: $body")
+            val ciclo = gson.fromJson(body, Ciclo_::class.java)
+            println("Updating ciclo: ${ciclo.id}, ${ciclo.year}, ${ciclo.number}")
+
+            val success = cicloController.updateCiclo(
+                ciclo.id,
+                ciclo.year,
+                ciclo.number,
+                ciclo.dateStart,
+                ciclo.dateFinish,
+                ciclo.is_active
+            )
+
+            val response = """
+            HTTP/1.1 ${if (success) 200 else 400}
+            Content-Type: application/json
+            Access-Control-Allow-Origin: *
+            Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE
+            Access-Control-Allow-Headers: Content-Type
+            Connection: close
+            
+            ${gson.toJson(mapOf(
+                "success" to success,
+                "message" to if (success) "Ciclo actualizado exitosamente" else "Error al actualizar ciclo",
+                "data" to ciclo
+            ))}
+        """.trimIndent()
+
+            writer.println(response)
+            writer.flush()
+
+        } catch (e: Exception) {
+            println("Error in handleUpdateCiclo: ${e.message}")
+            val errorResponse = """
+            HTTP/1.1 500
+            Content-Type: application/json
+            
+            ${gson.toJson(mapOf(
+                "error" to "Internal server error",
+                "message" to e.message
+            ))}
         """.trimIndent()
             writer.println(errorResponse)
             writer.flush()
@@ -604,6 +675,144 @@ class SimpleHttpServer(private val port: Int) {
 
    // ---------------------------Fin del manejo de solicitudes de la entidad "matriculas"-------------------------
 
+    // -------------------------Manejo de solicitud de entidad Group-------------------------
+    private fun handleGetGroups(writer: PrintWriter) {
+        val groups = groupController.getAllGrupos()
+        val response = mapOf(
+            "status" to "success",
+            "data" to groups
+        )
+        sendJsonResponse(writer, response)
+    }
+
+    private fun handleDeleteGroup(writer: PrintWriter, id: Int?) {
+        println("DELETE group request received for id: $id")
+        if (id == null) {
+            println("Invalid ID received")
+            sendErrorResponse(writer, "ID inválido")
+            return
+        }
+        try {
+            val success = groupController.deleteGrupo(id)
+            println("Delete operation result: $success")
+
+            if (success) {
+                sendJsonResponse(writer, mapOf("success" to true))
+            } else {
+                sendErrorResponse(writer, "Error deleting group")
+            }
+        } catch (e: Exception) {
+            println("Error deleting group: ${e.message}")
+            e.printStackTrace()
+            sendErrorResponse(writer, "Error interno del servidor: ${e.message}")
+        }
+    }
+
+    private fun handleCreateGroup(writer: PrintWriter, body: String) {
+        println("POST /api/groups request received with body: $body")
+
+        try {
+            val group = gson.fromJson(body, Grupo_::class.java)
+            println("Creating group: $group")
+
+            // Usar el método correcto del controlador
+            val createdGroup = groupController.insertGrupo(
+                group.id,
+                group.numberGroup,
+                group.year,
+                group.horario,
+                group.courseCod,
+                group.teacherId
+            )
+
+            val response = """
+            HTTP/1.1 201 Created
+            Content-Type: application/json
+            Access-Control-Allow-Origin: *
+            Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE
+            Access-Control-Allow-Headers: Content-Type
+            Connection: close
+            
+            ${gson.toJson(mapOf(
+                "success" to true,
+                "message" to "Group successfully created",
+                "data" to createdGroup
+            ))}
+        """.trimIndent()
+
+            writer.println(response)
+            writer.flush()
+
+        } catch (e: Exception) {
+            println("Error in handleCreateGroup: ${e.message}")
+            val errorResponse = """
+            HTTP/1.1 500 Internal Server Error
+            Content-Type: application/json
+            
+            ${gson.toJson(mapOf(
+                "success" to false,
+                "error" to "Error updating group",
+                "message" to e.message
+            ))}
+        """.trimIndent()
+            writer.println(errorResponse)
+            writer.flush()
+        }
+    }
+
+    private fun handleUpdateGroup(writer: PrintWriter, body: String) {
+        println("PUT /api/groups request received with body: $body")
+
+        try {
+            val group = gson.fromJson(body, Grupo_::class.java)
+            println("Updating group: $group")
+
+            val success = groupController.updateGrupo(
+                group.id,
+                group.numberGroup,
+                group.year,
+                group.horario,
+                group.courseCod,
+                group.teacherId
+            )
+
+            val response = """
+            HTTP/1.1 ${if (success) 200 else 400}
+            Content-Type: application/json
+            Access-Control-Allow-Origin: *
+            Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE
+            Access-Control-Allow-Headers: Content-Type
+            Connection: close
+            
+            ${gson.toJson(mapOf(
+                "success" to success,
+                "message" to if (success) "Group successfully updated" else "Error updating group",
+                "data" to group
+            ))}
+        """.trimIndent()
+
+            writer.println(response)
+            writer.flush()
+
+        } catch (e: Exception) {
+            println("Error in handleUpdateGroup: ${e.message}")
+            val errorResponse = """
+            HTTP/1.1 500 Internal Server Error
+            Content-Type: application/json
+            
+            ${gson.toJson(mapOf(
+                "success" to false,
+                "error" to "Error updating group",
+                "message" to e.message
+            ))}
+        """.trimIndent()
+            writer.println(errorResponse)
+            writer.flush()
+        }
+    }
+
+
+    //--------------------------Fin del manejo de solicitudes de la entidad Grpu[\p-------------------------
 
     private fun sendJsonResponse(writer: PrintWriter, data: Any) {
         writer.println("HTTP/1.1 200 OK")
