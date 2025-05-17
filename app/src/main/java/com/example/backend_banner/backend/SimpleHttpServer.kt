@@ -13,6 +13,8 @@ import com.example.backend_banner.backend.Models.Enrollment_
 import com.example.backend_banner.backend.Models.Grupo_
 import com.example.backend_banner.backend.Models.Student_
 import com.example.backend_banner.backend.Models.Teacher_
+import com.example.backend_banner.backend.Models.Usuario_
+import com.example.banner.backend.Controllers.UserController
 import com.google.gson.Gson
 import java.net.ServerSocket
 import java.net.Socket
@@ -27,6 +29,7 @@ class SimpleHttpServer(private val port: Int) {
     private val groupController = GrupoController()
     private val studentController = StudentController()
     private val teacherController = TeacherController()
+    private val userController = UserController()
 
     fun start() {
         Thread {
@@ -195,7 +198,7 @@ class SimpleHttpServer(private val port: Int) {
                     handleUpdateStudent(writer, body)
                 }
 
-                //Ruta para la entidad "Tecaher"
+                //Rutas para la entidad Tecaher
                 path.equals("/api/teachers", ignoreCase = true) && method == "GET" -> {
                     handleGetTeachers(writer)
                 }
@@ -208,6 +211,21 @@ class SimpleHttpServer(private val port: Int) {
                 }
                 path.equals("/api/teachers", ignoreCase = true) && method == "PUT" -> {
                     handleUpdateTeacher(writer, body)
+                }
+
+                //Rutas para la entidad User
+                path.equals("/api/users", ignoreCase = true) && method == "GET" -> {
+                    handleGetUsers(writer)
+                }
+                path.startsWith("/api/users/") && method == "DELETE" -> {
+                    val id = path.removePrefix("/api/users/").toIntOrNull()
+                    handleDeleteUser(writer, id)
+                }
+                path.equals("/api/users", ignoreCase = true) && method == "POST" -> {
+                    handleCreateUser(writer, body)
+                }
+                path.equals("/api/users", ignoreCase = true) && method == "PUT" -> {
+                    handleUpdateUser(writer, body)
                 }
 
 
@@ -1123,6 +1141,141 @@ class SimpleHttpServer(private val port: Int) {
     }
     //--------------------------Fin del manejo de solicitudes de la entidad "Teacher"-------------------------
 
+
+    // -------------------------Manejo de solicitudes de la entidad "User"-------------------------
+    private fun handleGetUsers(writer: PrintWriter) {
+        try {
+            val users = userController.getAllUsers()
+            val response = mapOf(
+                "status" to "success",
+                "data" to users
+            )
+            sendJsonResponse(writer, response)
+        } catch (e: Exception) {
+            println("Error in handleGetUsers: ${e.message}")
+            sendErrorResponse(writer, "Error al obtener usuarios")
+        }
+    }
+
+    private fun handleDeleteUser(writer: PrintWriter, id: Int?) {
+        println("DELETE user request received for id: $id")
+        if (id == null) {
+            println("Invalid ID received")
+            sendErrorResponse(writer, "ID inválido")
+            return
+        }
+        try {
+            val success = userController.deleteUser(id)
+            println("Delete operation result: $success")
+
+            if (success) {
+                sendJsonResponse(writer, mapOf("success" to true))
+            } else {
+                sendErrorResponse(writer, "Error al eliminar usuario")
+            }
+        } catch (e: Exception) {
+            println("Error deleting user: ${e.message}")
+            e.printStackTrace()
+            sendErrorResponse(writer, "Error interno del servidor: ${e.message}")
+        }
+    }
+
+    private fun handleCreateUser(writer: PrintWriter, body: String) {
+        println("POST /api/users request received with body: $body")
+
+        try {
+            val user = gson.fromJson(body, Usuario_::class.java)
+            println("Creating user: $user")
+
+            val createdUser = userController.insertUser(
+                user.id,
+                user.password,
+                user.role
+            )
+
+            val response = """
+            HTTP/1.1 201 Created
+            Content-Type: application/json
+            Access-Control-Allow-Origin: *
+            Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE
+            Access-Control-Allow-Headers: Content-Type
+            Connection: close
+            
+            ${gson.toJson(mapOf(
+                "success" to true,
+                "message" to "User successfully created",
+                "data" to createdUser
+            ))}
+        """.trimIndent()
+
+            writer.println(response)
+            writer.flush()
+
+        } catch (e: Exception) {
+            println("Error in handleCreateUser: ${e.message}")
+            val errorResponse = """
+            HTTP/1.1 500 Internal Server Error
+            Content-Type: application/json
+            
+            ${gson.toJson(mapOf(
+                "success" to false,
+                "error" to "Error al crear usuario",
+                "message" to e.message
+            ))}
+        """.trimIndent()
+            writer.println(errorResponse)
+            writer.flush()
+        }
+    }
+
+    private fun handleUpdateUser(writer: PrintWriter, body: String) {
+        println("PUT /api/users request received with body: $body")
+
+        try {
+            val user = gson.fromJson(body, Usuario_::class.java)
+            println("Updating user: $user")
+
+            val success = userController.updateUser(
+                user.id,
+                user.password,
+                user.role
+            )
+
+            val response = """
+            HTTP/1.1 ${if (success) 200 else 400}
+            Content-Type: application/json
+            Access-Control-Allow-Origin: *
+            Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE
+            Access-Control-Allow-Headers: Content-Type
+            Connection: close
+            
+            ${gson.toJson(mapOf(
+                "success" to success,
+                "message" to if (success) "User successfully updated" else "Error updating user",
+                "data" to user
+            ))}
+        """.trimIndent()
+
+            writer.println(response)
+            writer.flush()
+
+        } catch (e: Exception) {
+            println("Error in handleUpdateUser: ${e.message}")
+            val errorResponse = """
+            HTTP/1.1 500 Internal Server Error
+            Content-Type: application/json
+            
+            ${gson.toJson(mapOf(
+                "success" to false,
+                "error" to "Error updating user",
+                "message" to e.message
+            ))}
+        """.trimIndent()
+            writer.println(errorResponse)
+            writer.flush()
+        }
+    }
+    // -------------------------Fin del manejo de solicitudes de la entidad "User"-------------------------
     private fun sendJsonResponse(writer: PrintWriter, data: Any) {
         writer.println("HTTP/1.1 200 OK")
         writer.println("Access-Control-Allow-Origin: *")

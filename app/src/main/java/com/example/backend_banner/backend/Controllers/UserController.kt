@@ -38,6 +38,10 @@ class UserController {
         return DatabaseDAO.executeStoredProcedure("update_user", id, password, role)
     }
 
+    fun deleteUser(id: Int): Boolean {
+        return DatabaseDAO.executeStoredProcedure("delete_user", id)
+    }
+
     //login
     fun loginUser(id: Int, password: String): Boolean {
         val procedureName = "sp_LoginUsuario"
