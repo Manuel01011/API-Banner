@@ -198,6 +198,21 @@ class SimpleHttpServer(private val port: Int) {
                 path.equals("/api/students", ignoreCase = true) && method == "PUT" -> {
                     handleUpdateStudent(writer, body)
                 }
+                path.startsWith("/api/students/academic-history") && method == "GET" -> {
+                    // Obtener parámetros de la URL
+                    val query = path.substringAfter("?", "")
+                    val studentId = query.split("&")
+                        .find { it.startsWith("studentId=") }
+                        ?.substringAfter("=")
+                        ?.toIntOrNull()
+
+                    if (studentId != null) {
+                        handleGetStudentAcademicHistory(writer, studentId)
+                    } else {
+                        sendErrorResponse(writer, "Se requiere studentId como parámetro en la URL")
+                    }
+                }
+
 
                 //Rutas para la entidad Tecaher
                 path.equals("/api/teachers", ignoreCase = true) && method == "GET" -> {
@@ -724,6 +739,42 @@ class SimpleHttpServer(private val port: Int) {
         """.trimIndent()
             writer.println(errorResponse)
             writer.flush()
+        }
+    }
+
+    private fun handleGetStudentAcademicHistory(writer: PrintWriter, studentId: Int) {
+        try {
+            val history = enrollmentController.getStudentAcademicHistory(studentId)
+            val historyData = history.map {
+                mapOf(
+                    "course" to mapOf(
+                        "code" to it.courseCode,
+                        "name" to it.courseName,
+                        "credits" to it.credits
+                    ),
+                    "grade" to it.grade,
+                    "cycle" to mapOf(
+                        "year" to it.cycleYear,
+                        "number" to it.cycleNumber
+                    ),
+                    "career" to mapOf(
+                        "code" to it.careerCode,
+                        "name" to it.careerName
+                    ),
+                    "group" to mapOf(
+                        "number" to it.groupNumber
+                    ),
+                    "teacher" to it.teacherName
+                )
+            }
+
+            val response = mapOf(
+                "status" to "success",
+                "data" to historyData
+            )
+            sendJsonResponse(writer, response)
+        } catch (e: Exception) {
+            sendErrorResponse(writer, "Error al obtener historial académico: ${e.message}")
         }
     }
 

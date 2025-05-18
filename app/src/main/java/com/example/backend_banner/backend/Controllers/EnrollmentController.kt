@@ -84,4 +84,47 @@ class EnrollmentController {
         return cours
     }
 
+    fun getStudentAcademicHistory(studentId: Int): List<StudentAcademicHistory> {
+        val procedureName = "GetStudentAcademicHistory"
+        val resultSet = DatabaseDAO.executeStoredProcedureWithResults(procedureName, studentId)
+        val historyItems = mutableListOf<StudentAcademicHistory>()
+
+        resultSet?.let {
+            while (it.next()) {
+                historyItems.add(
+                    StudentAcademicHistory(
+                        courseCode = it.getInt("course_cod"),
+                        courseName = it.getString("course_name"),
+                        credits = it.getInt("credits"),
+                        grade = it.getDouble("grade"),
+                        cycleYear = it.getInt("ciclo_year"),
+                        cycleNumber = it.getInt("ciclo_number"),
+                        careerCode = it.getInt("career_cod"),
+                        careerName = it.getString("career_name"),
+                        groupNumber = it.getInt("number_group"),
+                        teacherName = it.getString("teacher_name") ?: "No asignado"
+                    )
+                )
+            }
+            it.close()
+        }
+
+        return historyItems
+    }
+}
+
+data class StudentAcademicHistory(
+    val courseCode: Int,
+    val courseName: String,
+    val credits: Int,
+    val grade: Double,
+    val cycleYear: Int,
+    val cycleNumber: Int,
+    val careerCode: Int,
+    val careerName: String,
+    val groupNumber: Int,
+    val teacherName: String
+) {
+    val formattedCycle: String get() = "$cycleYear-$cycleNumber"
+    val formattedGrade: String get() = "%.2f".format(grade)
 }
