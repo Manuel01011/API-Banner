@@ -16,6 +16,7 @@ import com.example.backend_banner.backend.Models.Teacher_
 import com.example.backend_banner.backend.Models.Usuario_
 import com.example.banner.backend.Controllers.UserController
 import com.google.gson.Gson
+import com.google.gson.JsonObject
 import java.net.ServerSocket
 import java.net.Socket
 import java.io.*
@@ -227,7 +228,10 @@ class SimpleHttpServer(private val port: Int) {
                 path.equals("/api/users", ignoreCase = true) && method == "PUT" -> {
                     handleUpdateUser(writer, body)
                 }
-
+                //Ruta del login
+                path.equals("/api/login", ignoreCase = true) && method == "POST" -> {
+                    handleLogin(writer, body)
+                }
 
                 else -> {
                     writer.println("HTTP/1.1 404 Not Found")
@@ -443,7 +447,7 @@ class SimpleHttpServer(private val port: Int) {
             
             ${gson.toJson(mapOf(
                 "success" to success,
-                "message" to if (success) "Ciclo actualizado exitosamente" else "Error al actualizar ciclo",
+                "message" to if (success) "Cycle updated successfull" else "Error al actualizar ciclo",
                 "data" to ciclo
             ))}
         """.trimIndent()
@@ -1276,6 +1280,71 @@ class SimpleHttpServer(private val port: Int) {
         }
     }
     // -------------------------Fin del manejo de solicitudes de la entidad "User"-------------------------
+
+    //Login
+    private fun handleLogin(writer: PrintWriter, body: String) {
+        println("POST /api/login request received with body: $body")
+
+        try {
+            val jsonObject = gson.fromJson(body, JsonObject::class.java)
+            val id = jsonObject.get("id")?.asInt
+            val password = jsonObject.get("password")?.asString
+
+            if (id == null || password == null) {
+                sendErrorResponse(writer, "ID y contraseña son requeridos")
+                return
+            }
+
+            // Verificar credenciales
+            val loginSuccess = userController.loginUser(id, password)
+
+            if (loginSuccess) {
+                // Obtener información del usuario
+                val user = userController.getUserById(id)
+                if (user != null) {
+                    val responseData = mapOf(
+                        "success" to true,
+                        "message" to "Login exitoso",
+                        "user" to mapOf(
+                            "id" to user.id,
+                            "role" to user.role
+                        )
+                    )
+
+                    // Respuesta exitosa
+                    writer.println("HTTP/1.1 200 OK")
+                    writer.println("Content-Type: application/json")
+                    writer.println("Access-Control-Allow-Origin: *")
+                    writer.println("Access-Control-Allow-Methods: POST, GET, OPTIONS")
+                    writer.println("Access-Control-Allow-Headers: Content-Type")
+                    writer.println("Connection: close")
+                    writer.println()
+                    writer.println(gson.toJson(responseData))
+                } else {
+                    // Caso improbable donde loginSuccess es true pero no se encuentra el usuario
+                    sendErrorResponse(writer, "Error interno: usuario no encontrado")
+                }
+            } else {
+                // Credenciales incorrectas
+                val responseData = mapOf(
+                    "success" to false,
+                    "message" to "Credenciales incorrectas"
+                )
+
+                writer.println("HTTP/1.1 401 Unauthorized")
+                writer.println("Content-Type: application/json")
+                writer.println("Access-Control-Allow-Origin: *")
+                writer.println("Connection: close")
+                writer.println()
+                writer.println(gson.toJson(responseData))
+            }
+        } catch (e: Exception) {
+            println("Error in handleLogin: ${e.message}")
+            e.printStackTrace()
+            sendErrorResponse(writer, "Error en el servidor: ${e.message}")
+        }
+    }
+    // -------------------------Fin del manejo de solicitudes de la entidad "login"-------------------------
     private fun sendJsonResponse(writer: PrintWriter, data: Any) {
         writer.println("HTTP/1.1 200 OK")
         writer.println("Access-Control-Allow-Origin: *")

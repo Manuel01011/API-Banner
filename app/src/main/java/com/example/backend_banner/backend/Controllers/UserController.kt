@@ -28,9 +28,20 @@ class UserController {
         return usuarios
     }
 
-    // Insertar usuario utilizando un procedimiento almacenado
     fun insertUser(id: Int, password: String, role: String): Boolean {
-        val procedureName = "insert_user" // Nombre del procedimiento almacenado
+        val procedureName = "insert_user"
+
+        // Validar el rol antes de insertar
+        val validRoles = setOf("admin", "teacher", "student")
+        if (!validRoles.contains(role.lowercase())) {
+            throw IllegalArgumentException("Invalid role. Must be one of: ${validRoles.joinToString()}")
+        }
+
+        // Validar la contraseña
+        if (password.isBlank() || password.length < 4) {
+            throw IllegalArgumentException("Password must be at least 4 characters long")
+        }
+
         return DatabaseDAO.executeStoredProcedure(procedureName, id, password, role)
     }
 
@@ -42,17 +53,28 @@ class UserController {
         return DatabaseDAO.executeStoredProcedure("delete_user", id)
     }
 
-    //login
     fun loginUser(id: Int, password: String): Boolean {
-        val procedureName = "sp_LoginUsuario"
-        val resultSet = DatabaseDAO.executeStoredProcedureWithResults(procedureName, id, password)
+        val user = getUserById(id)
+        return user != null && user.password == password
+    }
+
+    fun getUserById(id: Int): Usuario_? {
+        val procedureName = "GetUsuarioById"
+        val resultSet = DatabaseDAO.executeStoredProcedureWithResults(procedureName, id)
 
         return resultSet?.let {
             if (it.next()) {
-                it.getBoolean("p_resultado") // Obtener el valor de salida
+                Usuario_(
+                    it.getInt("id"),
+                    it.getString("password"),
+                    it.getString("role")
+                ).also {
+                    resultSet.close() // Asegurarse de cerrar el ResultSet
+                }
             } else {
-                false
+                null
             }
-        } ?: false
+        }
     }
+
 }
