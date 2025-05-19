@@ -968,7 +968,8 @@ class SimpleHttpServer(private val port: Int) {
                 student.telNumber,
                 student.email,
                 student.bornDate,
-                student.careerCod
+                student.careerCod,
+                student.password
             )
 
             val response = """
