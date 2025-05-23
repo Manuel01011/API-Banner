@@ -38,6 +38,33 @@ class EnrollmentController {
         return DatabaseDAO.executeStoredProcedure(procedureName, studentId, grupoId, grade)
     }
 
+    fun getEnrollmentsByGroup(groupId: Int): List<EnrollmentInfo> {
+        val enrollments = mutableListOf<EnrollmentInfo>()
+        val procedureName = "GetEnrollmentsByGroupId"
+
+        val resultSet: ResultSet? = DatabaseDAO.executeStoredProcedureWithResults(procedureName, groupId)
+
+        resultSet?.use { rs ->
+            while (rs.next()) {
+                val enrollment = EnrollmentInfo(
+                    studentId = rs.getInt("student_id"),
+                    studentName = rs.getString("student_name"),
+                    studentEmail = rs.getString("student_email"),
+                    grupoId = rs.getInt("grupo_id"),
+                    groupNumber = rs.getInt("group_number"),
+                    courseName = rs.getString("course_name"),
+                    courseCredits = rs.getInt("course_credits"),
+                    grade = if (rs.getObject("grade") != null) rs.getDouble("grade") else null,
+                    teacherName = rs.getString("teacher_name"),
+                    cicloAcademico = rs.getString("ciclo_academico")
+                )
+                enrollments.add(enrollment)
+            }
+        }
+
+        return enrollments
+    }
+
     // Eliminar una inscripción
     fun deleteEnrollment(studentId: Int, grupoId: Int): Boolean {
         val procedureName = "delete_enrollment"
@@ -128,3 +155,16 @@ data class StudentAcademicHistory(
     val formattedCycle: String get() = "$cycleYear-$cycleNumber"
     val formattedGrade: String get() = "%.2f".format(grade)
 }
+
+data class EnrollmentInfo(
+    val studentId: Int,
+    val studentName: String,
+    val studentEmail: String,
+    val grupoId: Int,
+    val groupNumber: Int,
+    val courseName: String,
+    val courseCredits: Int,
+    val grade: Double?,
+    val teacherName: String,
+    val cicloAcademico: String
+)

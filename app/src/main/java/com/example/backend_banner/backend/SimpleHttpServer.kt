@@ -228,6 +228,14 @@ class SimpleHttpServer(private val port: Int) {
                 path.equals("/api/teachers", ignoreCase = true) && method == "PUT" -> {
                     handleUpdateTeacher(writer, body)
                 }
+                path.startsWith("/api/teachers/") && path.endsWith("/groups") && method == "GET" -> {
+                    val teacherId = path.removePrefix("/api/teachers/").removeSuffix("/groups").toIntOrNull()
+                    handleGetTeacherGroups(writer, teacherId)
+                }
+                path.startsWith("/api/groups/") && path.endsWith("/enrollments") && method == "GET" -> {
+                    val groupId = path.removePrefix("/api/groups/").removeSuffix("/enrollments").toIntOrNull()
+                    handleGetGroupEnrollments(writer, groupId)
+                }
 
                 //Rutas para la entidad User
                 path.equals("/api/users", ignoreCase = true) && method == "GET" -> {
@@ -1193,6 +1201,42 @@ class SimpleHttpServer(private val port: Int) {
         """.trimIndent()
             writer.println(errorResponse)
             writer.flush()
+        }
+    }
+
+    private fun handleGetTeacherGroups(writer: PrintWriter, teacherId: Int?) {
+        if (teacherId == null) {
+            sendErrorResponse(writer, "ID de profesor inválido")
+            return
+        }
+
+        try {
+            val groups = groupController.getGroupsByTeacher(teacherId)
+            val response = mapOf(
+                "status" to "success",
+                "data" to groups
+            )
+            sendJsonResponse(writer, response)
+        } catch (e: Exception) {
+            sendErrorResponse(writer, "Error al obtener grupos del profesor")
+        }
+    }
+
+    private fun handleGetGroupEnrollments(writer: PrintWriter, groupId: Int?) {
+        if (groupId == null) {
+            sendErrorResponse(writer, "ID de grupo inválido")
+            return
+        }
+
+        try {
+            val enrollments = enrollmentController.getEnrollmentsByGroup(groupId)
+            val response = mapOf(
+                "status" to "success",
+                "data" to enrollments
+            )
+            sendJsonResponse(writer, response)
+        } catch (e: Exception) {
+            sendErrorResponse(writer, "Error al obtener matriculas del grupo")
         }
     }
     //--------------------------Fin del manejo de solicitudes de la entidad "Teacher"-------------------------

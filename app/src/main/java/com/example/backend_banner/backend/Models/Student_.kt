@@ -22,6 +22,6 @@ class Student_ {
     }
 
     override fun toString(): String {
-        return "Student(id=$id, name='$name', telNumber=$telNumber, email='$email', bornDate='$bornDate', careerCod=$careerCod), password='$password')"
+        return "Student(name='$name')"
     }
 }
