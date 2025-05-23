@@ -21,7 +21,8 @@ class TeacherController {
                     it.getInt("id"),
                     it.getString("name"),
                     it.getInt("tel_number"),
-                    it.getString("email")
+                    it.getString("email"),
+                    it.getString("password")
                 )
                 teachers.add(teacher)
             }
@@ -31,9 +32,9 @@ class TeacherController {
         return teachers
     }
 
-    fun insertTeacher(id: Int, name: String, telNumber: Int, email: String): Boolean {
+    fun insertTeacher(id: Int, name: String, telNumber: Int, email: String, password: String): Boolean {
         val procedureName = "insert_teacher"
-        return DatabaseDAO.executeStoredProcedure(procedureName, id, name, telNumber, email)
+        return DatabaseDAO.executeStoredProcedure(procedureName, id, name, telNumber, email, password)
     }
     fun updateTeacher(id: Int, name: String, telNumber: Int, email: String): Boolean {
         return DatabaseDAO.executeStoredProcedure("update_teacher", id, name, telNumber, email)
@@ -62,6 +63,7 @@ class TeacherController {
                     it.getString("name"),
                     it.getInt("tel_number"),
                     it.getString("email"),
+                    it.getString("password")
                 )
                 teachers.add(teacher)
             }
