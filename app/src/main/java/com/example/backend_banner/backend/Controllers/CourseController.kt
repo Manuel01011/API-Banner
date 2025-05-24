@@ -31,6 +31,27 @@ class CourseController {
         return cours
     }
 
+    fun getCoursesNotAssignedToCareer(careerCod: Int): List<Course_> {
+        val procedureName = "get_courses_not_assigned_to_career"
+        val courses = mutableListOf<Course_>()
+        val resultSet = DatabaseDAO.executeStoredProcedureWithResults(procedureName, careerCod)
+
+        resultSet?.use { rs ->
+            while (rs.next()) {
+                val course = Course_(
+                    rs.getInt("cod"),
+                    rs.getString("name"),
+                    rs.getInt("credits"),
+                    rs.getInt("hours"),
+                    rs.getInt("ciclo_id"),
+                    rs.getInt("career_cod")  // Este será 0 según el SP
+                )
+                courses.add(course)
+            }
+        }
+        return courses
+    }
+
     fun insertCourse(cod: Int, name: String, credits: Int, hours: Int, cicloId: Int, careerCod: Int): Boolean {
         val procedureName = "insert_course"
         return DatabaseDAO.executeStoredProcedure(procedureName, cod, name, credits, hours, cicloId, careerCod)

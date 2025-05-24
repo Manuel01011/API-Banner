@@ -3,6 +3,7 @@ package com.example.backend_banner.backend.Controllers
 import com.example.backend_banner.backend.Models.Career_
 import com.example.backend_banner.backend.Models.Course_
 import com.example.backend_banner.backend.service.DatabaseDAO
+import com.google.gson.Gson
 import java.sql.ResultSet
 
 class CareerController {
@@ -78,36 +79,61 @@ class CareerController {
         }
     }
 
-    //funcion esperada
-    fun editCareer(cod: Int, name: String, title: String, coursesToAdd: List<Int>, coursesToRemove: List<Int>): Boolean {
-        val procedureName = "edit_career"
-
-        // Editar la carrera
-        val updated = DatabaseDAO.executeStoredProcedure(procedureName, cod, name, title)
-
-        if (!updated) return false  // Si no se actualizó la carrera, no seguir con los cursos
-
-        // Agregar cursos a la carrera
-        for (courseId in coursesToAdd) {
-            if (!addCourseToCareer(cod, courseId)) {
-                println("Error al agregar curso $courseId a la carrera $cod")
-                return false
-            }
-        }
-
-        // Quitar cursos de la carrera
-        for (courseId in coursesToRemove) {
-            if (!removeCourseFromCareer(courseId)) {
-                println("Error al remover curso $courseId de la carrera $cod")
-                return false
-            }
-        }
-
-        return true
+    fun addCourseToCareer(careerCod: Int, courseCod: Int): Boolean {
+        val procedureName = "add_course_to_career"
+        return DatabaseDAO.executeStoredProcedure(procedureName, careerCod, courseCod)
     }
 
-    fun addCourseToCareer(careerId: Int, courseId: Int): Boolean {
-        return DatabaseDAO.executeStoredProcedure("add_course_to_career", careerId, courseId)
+    fun removeCourseFromCareer(careerCod: Int, courseCod: Int): Boolean {
+        val procedureName = "remove_course_from_career"
+        return DatabaseDAO.executeStoredProcedure(procedureName, careerCod, courseCod)
+    }
+
+    fun getCareerById(careerId: Int): Career_? {
+        val procedureName = "get_career_by_id"
+        val resultSet = DatabaseDAO.executeStoredProcedureWithResults(procedureName, careerId)
+
+        return resultSet?.let {
+            if (it.next()) {
+                val cod = it.getInt("cod")
+                val name = it.getString("name")
+                val title = it.getString("title")
+                Career_(cod, name, title)
+            } else {
+                null
+            }
+        }
+    }
+
+    fun editCareer(
+        cod: Int,
+        name: String,
+        title: String,
+        coursesToAdd: List<Int>,
+        coursesToRemove: List<Int>
+    ): Boolean {
+        val procedureName = "edit_career"
+        val gson = Gson()
+
+        return try {
+            val result = DatabaseDAO.executeStoredProcedureWithResults(
+                procedureName,
+                cod,
+                name,
+                title,
+                gson.toJson(coursesToAdd),
+                gson.toJson(coursesToRemove)
+            )
+
+            if (result != null && result.next()) {
+                result.getBoolean("result")
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
     }
 
     fun removeCourseFromCareer(courseId: Int): Boolean {
@@ -117,6 +143,7 @@ class CareerController {
     fun updateCareer(id: Int, name: String, facultyId: Int): Boolean {
         return DatabaseDAO.executeStoredProcedure("update_career", id, name, facultyId)
     }
+
 
 
 }

@@ -3,6 +3,7 @@ package com.example.backend_banner.backend.service
 import com.example.banner.backend.service.GlobalException
 import com.example.banner.backend.service.NoDataException
 import com.google.gson.Gson
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import java.sql.CallableStatement
 import java.sql.Connection
@@ -77,6 +78,38 @@ object DatabaseDAO {
             null
         }
         com.example.backend_banner.backend.service.DatabaseDAO.dbHelper.closeConnection(com.example.backend_banner.backend.service.DatabaseDAO.conexion)
+    }
+
+    fun executeStoredProcedure2(procedureName: String, vararg params: Any): Boolean {
+        var conn: Connection? = null
+        var callableStatement: CallableStatement? = null
+
+        return try {
+            conn = getConnection() ?: return false
+            val placeholders = "?,".repeat(params.size).dropLast(1)
+            val call = "{call $procedureName($placeholders)}"
+
+            callableStatement = conn.prepareCall(call)
+
+            params.forEachIndexed { index, param ->
+                when (param) {
+                    is String -> callableStatement.setString(index + 1, param)
+                    is Int -> callableStatement.setInt(index + 1, param)
+                    is Boolean -> callableStatement.setBoolean(index + 1, param)
+                    is JsonArray -> callableStatement.setString(index + 1, param.toString())
+                    else -> callableStatement.setString(index + 1, param.toString())
+                }
+            }
+
+            callableStatement.execute()
+            true
+        } catch (e: SQLException) {
+            e.printStackTrace()
+            throw GlobalException("Error al ejecutar procedimiento almacenado: ${e.message}")
+        } finally {
+            callableStatement?.close()
+            conn?.let { dbHelper.closeConnection(it) }
+        }
     }
 
     // ejecutar metodos que editan o eliminan no muestran nada

@@ -17,10 +17,12 @@ import com.example.backend_banner.backend.Models.Usuario_
 import com.example.banner.backend.Controllers.UserController
 import com.google.gson.Gson
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import org.json.JSONObject
 import java.net.ServerSocket
 import java.net.Socket
 import java.io.*
+import com.google.gson.reflect.TypeToken
 
 class SimpleHttpServer(private val port: Int) {
     private val gson = Gson()
@@ -118,6 +120,14 @@ class SimpleHttpServer(private val port: Int) {
                 path.equals("/api/careers", ignoreCase = true) && method == "PUT" -> {
                     handleUpdateCareer(writer, body)
                 }
+                // Agregar curso a carrera
+                path.equals("/api/careers/courses", ignoreCase = true) && method == "POST" -> {
+                    handleAddCourseToCareer(writer, body)
+                }
+                // Eliminar curso de carrera
+                path.equals("/api/careers/courses", ignoreCase = true) && method == "DELETE" -> {
+                    handleRemoveCourseFromCareer(writer, body)
+                }
 
                 // Rutas para la entidad "ciclos"
                 path.equals("/api/ciclos", ignoreCase = true) && method == "GET" -> {
@@ -147,6 +157,14 @@ class SimpleHttpServer(private val port: Int) {
                 }
                 path.equals("/api/courses", ignoreCase = true) && method == "PUT" -> {
                     handleUpdateCourse(writer, body)
+                }
+                path.startsWith("/api/courses/not_assigned/") && method == "GET" -> {
+                    val careerId = path.removePrefix("/api/courses/not_assigned/").toIntOrNull()
+                    if (careerId != null) {
+                        handleGetNotAssignedCourses(writer, careerId)
+                    } else {
+                        sendErrorResponse(writer, "ID de carrera inválido")
+                    }
                 }
 
                 //Rutas para la entidad "matriculas"
@@ -213,7 +231,6 @@ class SimpleHttpServer(private val port: Int) {
                         sendErrorResponse(writer, "Se requiere studentId como parámetro en la URL")
                     }
                 }
-
 
                 //Rutas para la entidad Tecaher
                 path.equals("/api/teachers", ignoreCase = true) && method == "GET" -> {
@@ -365,29 +382,89 @@ class SimpleHttpServer(private val port: Int) {
         }
     }
 
-    private fun handleUpdateCareer(writer: PrintWriter, body: String) {
+    fun handleUpdateCareer(writer: PrintWriter, body: String) {
+        val gson = Gson()
+        try {
+            println("Raw update request body: $body")
+
+            // Primero, eliminar las comillas exteriores si existen
+            val cleanBody = body.removeSurrounding("\"")
+            // Luego, reemplazar las secuencias de escape
+            val unescapedBody = cleanBody.replace("\\\"", "\"")
+                .replace("\\n", "")
+                .replace("\\", "")
+
+            println("Cleaned request body: $unescapedBody")
+
+            val jsonObject = JsonParser.parseString(unescapedBody).asJsonObject
+            val careerJson = jsonObject.getAsJsonObject("career")
+
+            val cod = careerJson.get("cod").asInt
+            val name = careerJson.get("name").asString
+            val title = careerJson.get("title").asString
+
+            val coursesToAdd = jsonObject.getAsJsonArray("coursesToAdd").map { it.asInt }
+            val coursesToRemove = jsonObject.getAsJsonArray("coursesToRemove").map { it.asInt }
+
+            println("Parsed data - Cod: $cod, Name: $name, Title: $title")
+            println("Courses to add: $coursesToAdd")
+            println("Courses to remove: $coursesToRemove")
+
+            val result = careerController.editCareer(cod, name, title, coursesToAdd, coursesToRemove)
+
+            val response = JsonObject().apply {
+                addProperty("success", result)
+                if (!result) addProperty("message", "No se pudo actualizar la carrera")
+            }
+
+            writer.println("HTTP/1.1 ${if (result) 200 else 400}")
+            writer.println("Content-Type: application/json")
+            writer.println()
+            writer.println(response.toString())
+
+        } catch (e: Exception) {
+            println("Error in handleUpdateCareer: ${e.stackTraceToString()}")
+
+            val errorResponse = JsonObject().apply {
+                addProperty("success", false)
+                addProperty("message", "Error en el formato de los datos: ${e.message}")
+            }
+
+            writer.println("HTTP/1.1 400")
+            writer.println("Content-Type: application/json")
+            writer.println()
+            writer.println(errorResponse.toString())
+        }
+    }
+
+    private fun handleAddCourseToCareer(writer: PrintWriter, body: String) {
         try {
             val json = JSONObject(body)
-            val career = gson.fromJson(json.toString(), Career_::class.java)
-            val coursesToAdd = json.optJSONArray("coursesToAdd")?.let {
-                (0 until it.length()).map { i -> it.getInt(i) }
-            } ?: emptyList()
-            val coursesToRemove = json.optJSONArray("coursesToRemove")?.let {
-                (0 until it.length()).map { i -> it.getInt(i) }
-            } ?: emptyList()
+            val careerCod = json.getInt("careerCod")
+            val courseCod = json.getInt("courseCod")
 
-            val success = careerController.editCareer(
-                career.cod,
-                career.name,
-                career.title,
-                coursesToAdd,
-                coursesToRemove
-            )
-
+            val success = careerController.addCourseToCareer(careerCod, courseCod)
             if (success) {
                 sendJsonResponse(writer, mapOf("success" to true))
             } else {
-                sendErrorResponse(writer, "Error updating career")
+                sendErrorResponse(writer, "Error adding course to career")
+            }
+        } catch (e: Exception) {
+            sendErrorResponse(writer, "Invalid data")
+        }
+    }
+
+    private fun handleRemoveCourseFromCareer(writer: PrintWriter, body: String) {
+        try {
+            val json = JSONObject(body)
+            val careerCod = json.getInt("careerCod")
+            val courseCod = json.getInt("courseCod")
+
+            val success = careerController.removeCourseFromCareer(careerCod, courseCod)
+            if (success) {
+                sendJsonResponse(writer, mapOf("success" to true))
+            } else {
+                sendErrorResponse(writer, "Error removing course from career")
             }
         } catch (e: Exception) {
             sendErrorResponse(writer, "Invalid data")
@@ -398,7 +475,7 @@ class SimpleHttpServer(private val port: Int) {
 
     // -------------------------Manejo de solicitudes de la entidad "ciclos"-------------------------
     private fun handleGetCiclos(writer: PrintWriter) {
-        val ciclos = cicloController.getAllCiclos() // Asume que tienes un CicloController
+        val ciclos = cicloController.getAllCiclos()
         val response = mapOf(
             "status" to "success",
             "data" to ciclos
@@ -537,6 +614,20 @@ class SimpleHttpServer(private val port: Int) {
             sendErrorResponse(writer, "Error al eliminar curso")
         }
     }
+
+    private fun handleGetNotAssignedCourses(writer: PrintWriter, careerId: Int) {
+        try {
+            val courses = courseController.getCoursesNotAssignedToCareer(careerId)
+            val response = mapOf(
+                "status" to "success",
+                "data" to courses
+            )
+            sendJsonResponse(writer, response)
+        } catch (e: Exception) {
+            sendErrorResponse(writer, "Error obteniendo cursos no asignados")
+        }
+    }
+
     private fun handleCreateCourse(writer: PrintWriter, body: String) {
         try {
             println("Received POST request with body: $body")
@@ -896,23 +987,19 @@ class SimpleHttpServer(private val port: Int) {
 
     private fun handleGetCareerCourses(writer: PrintWriter, path: String) {
         try {
-            // Extraer el código de la carrera de la URL
-            val cod = path.removePrefix("/api/careers/").removeSuffix("/courses").toInt()
+            val segments = path.split("/")
+            val careerCod = segments[3].toIntOrNull()
 
-            // Obtener los cursos
-            val courses = careerController.getCareerCourses(cod)
+            if (careerCod == null) {
+                sendErrorResponse(writer, "Invalid career code")
+                return
+            }
 
-            // Construir respuesta
-            val response = mapOf(
-                "success" to true,
-                "data" to courses
-            )
-            sendJsonResponse(writer, response)
-        } catch (e: NumberFormatException) {
-            sendErrorResponse(writer, "ID de carrera inválido")
+            val courses = careerController.getCareerCourses(careerCod)
+            sendJsonResponse(writer, courses)
         } catch (e: Exception) {
             e.printStackTrace()
-            sendErrorResponse(writer, "Error al obtener cursos")
+            sendErrorResponse(writer, "Error retrieving courses for career")
         }
     }
 
