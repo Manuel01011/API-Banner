@@ -8,6 +8,7 @@ class Course_ {
     var cicloId: Int = 0
     var careerCod: Int = 0
 
+
     constructor()
 
     constructor(cod: Int, name: String, credits: Int, hours: Int, cicloId: Int, careerCod: Int) {

@@ -1,6 +1,7 @@
 package com.example.backend_banner.backend.Controllers
 
 import com.example.backend_banner.backend.Models.Career_
+import com.example.backend_banner.backend.Models.Course_
 import com.example.backend_banner.backend.service.DatabaseDAO
 import java.sql.ResultSet
 
@@ -61,6 +62,20 @@ class CareerController {
         }
 
         return careers
+    }
+
+    fun getCareerCourses(careerCod: Int): List<Course_> {
+        val procedureName = "get_career_courses"
+        return try {
+            DatabaseDAO.executeStoredProcedureForList(
+                procedureName,
+                Course_::class.java,
+                careerCod
+            ) as List<Course_>
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
     }
 
     //funcion esperada

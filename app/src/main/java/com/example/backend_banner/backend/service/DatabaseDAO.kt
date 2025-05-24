@@ -2,6 +2,8 @@ package com.example.backend_banner.backend.service
 
 import com.example.banner.backend.service.GlobalException
 import com.example.banner.backend.service.NoDataException
+import com.google.gson.Gson
+import com.google.gson.JsonObject
 import java.sql.CallableStatement
 import java.sql.Connection
 import java.sql.ResultSet
@@ -15,6 +17,50 @@ object DatabaseDAO {
     // Obtener conexión
     private fun getConnection(): Connection? {
         return com.example.backend_banner.backend.service.DatabaseDAO.dbHelper.getConnection()?: throw GlobalException("No se pudo obtener la conexión a la base de datos")
+    }
+
+    fun executeStoredProcedureForList(
+        procedureName: String,
+        returnType: Class<*>,
+        vararg params: Any
+    ): List<Any> {
+        val gson = Gson()
+        val result = mutableListOf<Any>()
+        var conn: Connection? = null
+        try {
+            conn = getConnection() ?: return emptyList()
+            val placeholders = "?,".repeat(params.size).dropLast(1)
+            val call = "{call $procedureName($placeholders)}"
+
+            conn.prepareCall(call).use { cs ->
+                params.forEachIndexed { index, param ->
+                    cs.setObject(index + 1, param)
+                }
+
+                val hasResults = cs.execute()
+                if (hasResults) {
+                    cs.resultSet.use { rs ->
+                        val metaData = rs.metaData
+                        val columnCount = metaData.columnCount
+
+                        while (rs.next()) {
+                            val jsonObj = JsonObject()
+                            for (i in 1..columnCount) {
+                                val columnName = metaData.getColumnLabel(i)
+                                jsonObj.addProperty(columnName, rs.getString(i))
+                            }
+                            result.add(gson.fromJson(jsonObj, returnType))
+                        }
+                    }
+                }
+            }
+            return result
+        } catch (e: Exception) {
+            e.printStackTrace()
+            throw GlobalException("Error al ejecutar procedimiento: ${e.message}")
+        } finally {
+            conn?.let { dbHelper.closeConnection(it) }
+        }
     }
 
     // Método para ejecutar consultas SELECT
