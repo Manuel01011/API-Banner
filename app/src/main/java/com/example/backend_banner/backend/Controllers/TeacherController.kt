@@ -84,7 +84,6 @@ class TeacherController {
                     it.getInt("credits"),     // credits
                     it.getInt("hours"),       // hours
                     it.getInt("ciclo_id"),    // ciclo_id
-                    it.getInt("career_cod")   // career_cod
                 )
                 cours.add(course)
             }

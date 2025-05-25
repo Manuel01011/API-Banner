@@ -639,8 +639,7 @@ class SimpleHttpServer(private val port: Int) {
                 course.name,
                 course.credits,
                 course.hours,
-                course.cicloId,
-                course.careerCod
+                course.cicloId
             )
 
             val response = """
@@ -685,8 +684,7 @@ class SimpleHttpServer(private val port: Int) {
                 course.name,
                 course.credits,
                 course.hours,
-                course.cicloId,
-                course.careerCod
+                course.cicloId
             )
 
             val response = """
@@ -877,7 +875,6 @@ class SimpleHttpServer(private val port: Int) {
                         "number" to it.cycleNumber
                     ),
                     "career" to mapOf(
-                        "code" to it.careerCode,
                         "name" to it.careerName
                     ),
                     "group" to mapOf(

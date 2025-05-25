@@ -101,8 +101,7 @@ class EnrollmentController {
                         it.getString("name"),     // Nombre del curso
                         it.getInt("credits"),     // Créditos del curso
                         it.getInt("hours"),       // Horas del curso
-                        it.getInt("year"),
-                        it.getInt("ciclo_id")
+                        it.getInt("year")
                     )
                 )
             }
@@ -126,7 +125,6 @@ class EnrollmentController {
                         grade = it.getDouble("grade"),
                         cycleYear = it.getInt("ciclo_year"),
                         cycleNumber = it.getInt("ciclo_number"),
-                        careerCode = it.getInt("career_cod"),
                         careerName = it.getString("career_name"),
                         groupNumber = it.getInt("number_group"),
                         teacherName = it.getString("teacher_name") ?: "No asignado"
@@ -147,7 +145,6 @@ data class StudentAcademicHistory(
     val grade: Double,
     val cycleYear: Int,
     val cycleNumber: Int,
-    val careerCode: Int,
     val careerName: String,
     val groupNumber: Int,
     val teacherName: String

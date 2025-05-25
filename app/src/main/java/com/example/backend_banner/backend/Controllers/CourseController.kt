@@ -20,8 +20,7 @@ class CourseController {
                     it.getString("name"),
                     it.getInt("credits"),
                     it.getInt("hours"),
-                    it.getInt("ciclo_id"),
-                    it.getInt("career_cod")
+                    it.getInt("ciclo_id")
                 )
                 cours.add(course)
             }
@@ -43,8 +42,7 @@ class CourseController {
                     rs.getString("name"),
                     rs.getInt("credits"),
                     rs.getInt("hours"),
-                    rs.getInt("ciclo_id"),
-                    rs.getInt("career_cod")  // Este será 0 según el SP
+                    rs.getInt("ciclo_id")
                 )
                 courses.add(course)
             }
@@ -52,12 +50,12 @@ class CourseController {
         return courses
     }
 
-    fun insertCourse(cod: Int, name: String, credits: Int, hours: Int, cicloId: Int, careerCod: Int): Boolean {
+    fun insertCourse(cod: Int, name: String, credits: Int, hours: Int, cicloId: Int): Boolean {
         val procedureName = "insert_course"
-        return DatabaseDAO.executeStoredProcedure(procedureName, cod, name, credits, hours, cicloId, careerCod)
+        return DatabaseDAO.executeStoredProcedure(procedureName, cod, name, credits, hours, cicloId)
     }
-    fun updateCourse(cod: Int, name: String, credits: Int, hours: Int, cicloId: Int, careerCod: Int): Boolean {
-        return DatabaseDAO.executeStoredProcedure("update_course", cod, name, credits, hours, cicloId, careerCod)
+    fun updateCourse(cod: Int, name: String, credits: Int, hours: Int, cicloId: Int): Boolean {
+        return DatabaseDAO.executeStoredProcedure("update_course", cod, name, credits, hours, cicloId)
     }
 
     fun deleteCourse(cod: Int): Boolean {
@@ -84,8 +82,7 @@ class CourseController {
                     it.getString("name"),
                     it.getInt("credits"),
                     it.getInt("hours"),
-                    it.getInt("ciclo_id"),
-                    it.getInt("career_cod")
+                    it.getInt("ciclo_id")
                 )
                 cours.add(course)
             }
@@ -106,8 +103,7 @@ class CourseController {
                     rs.getString("name"),
                     rs.getInt("credits"),
                     rs.getInt("hours"),
-                    cicloId,
-                    careerCod
+                    cicloId
                 )
                 cours.add(course)
             }
