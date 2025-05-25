@@ -9,6 +9,7 @@ import java.sql.CallableStatement
 import java.sql.Connection
 import java.sql.ResultSet
 import java.sql.SQLException
+import java.sql.Types
 
 object DatabaseDAO {
 
@@ -109,6 +110,36 @@ object DatabaseDAO {
         } finally {
             callableStatement?.close()
             conn?.let { dbHelper.closeConnection(it) }
+        }
+    }
+
+    fun executeStoredProcedureWithNullableParams(procedureName: String, params: List<Any?>): ResultSet? {
+        return getConnection()?.let { conn -> // Safe call con let
+            try {
+                val call = "{call $procedureName(?, ?, ?, ?, ?, ?, ?, ?)}"
+                conn.prepareCall(call).use { cs ->
+                    params.forEachIndexed { index, param ->
+                        when (param) {
+                            null -> cs.setNull(index + 1, Types.NULL)
+                            is Int -> cs.setInt(index + 1, param)
+                            is String -> cs.setString(index + 1, param)
+                            else -> throw IllegalArgumentException("Tipo de parámetro no soportado")
+                        }
+                    }
+
+                    cs.execute()
+                    cs.resultSet
+                }
+            } catch (e: SQLException) {
+                e.printStackTrace()
+                null
+            } finally {
+                try {
+                    conn.close()
+                } catch (e: SQLException) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 

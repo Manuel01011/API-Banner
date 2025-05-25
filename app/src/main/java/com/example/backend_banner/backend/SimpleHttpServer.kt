@@ -5,16 +5,19 @@ import com.example.backend_banner.backend.Controllers.CicloController
 import com.example.backend_banner.backend.Controllers.CourseController
 import com.example.backend_banner.backend.Controllers.EnrollmentController
 import com.example.backend_banner.backend.Controllers.GrupoController
+import com.example.backend_banner.backend.Controllers.RegistrationRequestController
 import com.example.backend_banner.backend.Controllers.StudentController
 import com.example.backend_banner.backend.Controllers.TeacherController
 import com.example.backend_banner.backend.Models.Ciclo_
 import com.example.backend_banner.backend.Models.Course_
 import com.example.backend_banner.backend.Models.Enrollment_
 import com.example.backend_banner.backend.Models.Grupo_
+import com.example.backend_banner.backend.Models.RegistrationRequest_
 import com.example.backend_banner.backend.Models.Student_
 import com.example.backend_banner.backend.Models.Teacher_
 import com.example.backend_banner.backend.Models.Usuario_
 import com.example.banner.backend.Controllers.UserController
+import com.google.android.gms.identitycredentials.RegistrationRequest
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -34,6 +37,7 @@ class SimpleHttpServer(private val port: Int) {
     private val studentController = StudentController()
     private val teacherController = TeacherController()
     private val userController = UserController()
+    private val registrationRequestController = RegistrationRequestController()
 
     fun start() {
         Thread {
@@ -277,7 +281,33 @@ class SimpleHttpServer(private val port: Int) {
                 path.equals("/api/login", ignoreCase = true) && method == "POST" -> {
                     handleLogin(writer, body)
                 }
-
+                //rutas de registro
+                // Nueva ruta para crear solicitudes de registro
+                path.equals("/api/registration-requests", ignoreCase = true) && method == "POST" -> {
+                    handleCreateRegistrationRequest(writer, body)
+                }
+                // Nueva ruta para obtener solicitudes pendientes
+                path.equals("/api/registration-requests/pending", ignoreCase = true) && method == "GET" -> {
+                    handleGetPendingRegistrationRequests(writer)
+                }
+                // Nueva ruta para aprobar solicitud
+                path.matches(Regex("/api/registration-requests/\\d+/approve", RegexOption.IGNORE_CASE)) && method == "POST" -> {
+                    val requestId = path.split("/")[3].toIntOrNull()
+                    if (requestId != null) {
+                        handleApproveRegistrationRequest(writer, requestId)
+                    } else {
+                        sendErrorResponse(writer, "ID de solicitud inválido")
+                    }
+                }
+                // Nueva ruta para rechazar solicitud
+                path.matches(Regex("/api/registration-requests/\\d+/reject", RegexOption.IGNORE_CASE)) && method == "POST" -> {
+                    val requestId = path.split("/")[3].toIntOrNull()
+                    if (requestId != null) {
+                        handleRejectRegistrationRequest(writer, requestId)
+                    } else {
+                        sendErrorResponse(writer, "ID de solicitud inválido")
+                    }
+                }
                 else -> {
                     writer.println("HTTP/1.1 404 Not Found")
                     writer.println()
@@ -1568,6 +1598,251 @@ class SimpleHttpServer(private val port: Int) {
         }
     }
     // -------------------------Fin del manejo de solicitudes de la entidad "login"-------------------------
+
+    //-----------------------------------Manejo de solicitudes de registro ----------------------------------
+    //registro de solicitudes
+    private fun handleCreateRegistrationRequest(writer: PrintWriter, body: String) {
+        try {
+            val request = gson.fromJson(body, RegistrationRequest_::class.java)
+
+            // Validaciones básicas
+            if (request.user_id == 0 || request.password.isEmpty() || request.role.isEmpty()) {
+                throw IllegalArgumentException("Datos incompletos")
+            }
+
+            // Validar campos según rol
+            when (request.role) {
+                "student" -> {
+                    if (request.name.isNullOrEmpty() || request.tel_number == null ||
+                        request.email.isNullOrEmpty() || request.born_date.isNullOrEmpty() ||
+                        request.career_cod == null) {
+                        throw IllegalArgumentException("Faltan datos requeridos para estudiante")
+                    }
+                }
+                "teacher" -> {
+                    if (request.name.isNullOrEmpty() || request.tel_number == null ||
+                        request.email.isNullOrEmpty()) {
+                        throw IllegalArgumentException("Faltan datos requeridos para profesor")
+                    }
+                }
+                "admin", "matriculador" -> {
+                    // No se requieren datos adicionales
+                }
+                else -> throw IllegalArgumentException("Rol no válido")
+            }
+
+            // Guardar solicitud en base de datos
+            val requestId = registrationRequestController.createRequest(
+                user_id = request.user_id,
+                password = request.password,
+                role = request.role,
+                name = request.name,
+                tel_number = request.tel_number,
+                email = request.email,
+                born_date = request.born_date,
+                career_cod = request.career_cod
+            )
+
+            val response = """
+                HTTP/1.1 201 Created
+                Content-Type: application/json
+                Access-Control-Allow-Origin: *
+                
+                ${gson.toJson(mapOf(
+                "success" to true,
+                "message" to "Solicitud de registro enviada para aprobación",
+                "requestId" to requestId
+            ))}
+            """.trimIndent()
+            writer.println(response)
+        } catch (e: Exception) {
+            val errorResponse = """
+                HTTP/1.1 400 Bad Request
+                Content-Type: application/json
+                
+                ${gson.toJson(mapOf(
+                "success" to false,
+                "error" to "Error en la solicitud de registro",
+                "message" to e.message
+            ))}
+            """.trimIndent()
+            writer.println(errorResponse)
+        }
+        writer.flush()
+    }
+
+    private fun handleGetPendingRegistrationRequests(writer: PrintWriter) {
+        try {
+            val requests = registrationRequestController.getPendingRequests()
+
+            writer.println("HTTP/1.1 200 OK")
+            writer.println("Content-Type: application/json")
+            writer.println("Access-Control-Allow-Origin: *")
+            writer.println("Connection: close")
+            writer.println()
+            writer.println(gson.toJson(mapOf(
+                "success" to true,
+                "data" to requests
+            )))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            sendErrorResponse(writer, "Error al obtener solicitudes pendientes", 500)
+        }
+    }
+
+    private fun handleApproveRegistrationRequest(writer: PrintWriter, requestId: Int) {
+        try {
+            // 1. Obtener la solicitud
+            val request = registrationRequestController.getRequestById(requestId)
+                ?: throw IllegalArgumentException("Solicitud no encontrada")
+
+            // 2. Verificar estado
+            if (request.status != "pending") {
+                throw IllegalStateException("La solicitud ya fue procesada")
+            }
+
+            // 3. Crear usuario
+            userController.insertUser(
+                id = request.user_id,
+                password = request.password,
+                role = request.role
+            )
+
+            // 4. Crear entidad según rol
+            when (request.role.lowercase()) {
+                "student" -> {
+                    if (request.name == null || request.tel_number == null ||
+                        request.email == null || request.born_date == null ||
+                        request.career_cod == null) {
+                        throw IllegalArgumentException("Datos incompletos para estudiante")
+                    }
+
+                    studentController.insertStudent(
+                        id = request.user_id,
+                        name = request.name!!,
+                        telNumber = request.tel_number!!,
+                        email = request.email!!,
+                        bornDate = request.born_date!!,
+                        careerCod = request.career_cod!!,
+                        password = request.password
+                    )
+                }
+                "teacher" -> {
+                    if (request.name == null || request.tel_number == null || request.email == null) {
+                        throw IllegalArgumentException("Datos incompletos para profesor")
+                    }
+
+                    teacherController.insertTeacher(
+                        id = request.user_id,
+                        name = request.name!!,
+                        telNumber = request.tel_number!!,
+                        email = request.email!!,
+                        password = request.password
+                    )
+                }
+                // admin/matriculador no requieren entidades adicionales
+            }
+
+            // 5. Actualizar estado
+            registrationRequestController.updateRequestStatus(requestId, "approved")
+
+            // 6. Enviar respuesta JSON bien formada
+            val response = mapOf(
+                "success" to true,
+                "message" to "Usuario creado exitosamente",
+                "data" to mapOf(
+                    "userId" to request.user_id,
+                    "role" to request.role,
+                    "requestId" to requestId
+                )
+            )
+
+            sendJsonResponse(writer, 200, response)
+
+        } catch (e: IllegalArgumentException) {
+            sendJsonResponse(writer, 400, mapOf(
+                "success" to false,
+                "error" to "Datos inválidos",
+                "message" to e.message
+            ))
+        } catch (e: IllegalStateException) {
+            sendJsonResponse(writer, 409, mapOf(
+                "success" to false,
+                "error" to "Estado inválido",
+                "message" to e.message
+            ))
+        } catch (e: Exception) {
+            sendJsonResponse(writer, 500, mapOf(
+                "success" to false,
+                "error" to "Error interno",
+                "message" to "Error al procesar la solicitud: ${e.message ?: "Error desconocido"}"
+            ))
+            e.printStackTrace()
+        }
+    }
+
+    private fun sendJsonResponse(writer: PrintWriter, statusCode: Int, data: Any) {
+        writer.println("HTTP/1.1 $statusCode")
+        writer.println("Content-Type: application/json")
+        writer.println("Access-Control-Allow-Origin: *")
+        writer.println("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS")
+        writer.println("Access-Control-Allow-Headers: Content-Type")
+        writer.println("Connection: close")
+        writer.println()
+        writer.println(gson.toJson(data))
+        writer.flush()
+    }
+
+    private fun sendErrorResponse(
+        writer: PrintWriter,
+        statusCode: Int,
+        error: String,
+        message: String
+    ) {
+        val errorResponse = mapOf(
+            "success" to false,
+            "error" to error,
+            "message" to message,
+            "timestamp" to System.currentTimeMillis()
+        )
+
+        writer.println("HTTP/1.1 $statusCode")
+        writer.println("Content-Type: application/json")
+        writer.println("Access-Control-Allow-Origin: *")
+        writer.println("Connection: close")
+        writer.println()
+        writer.println(Gson().toJson(errorResponse))
+    }
+
+    private fun handleRejectRegistrationRequest(writer: PrintWriter, requestId: Int) {
+        try {
+            registrationRequestController.updateRequestStatus(requestId, "rejected")
+            sendJsonResponse(writer, mapOf(
+                "success" to true,
+                "message" to "Solicitud rechazada"
+            ))
+        } catch (e: Exception) {
+            sendErrorResponse(writer, "Error al rechazar solicitud: ${e.message}", 500)
+        }
+    }
+
+    private fun handleError(writer: PrintWriter, e: Exception) {
+        val errorResponse = """
+        HTTP/1.1 500 Internal Server Error
+        Content-Type: application/json
+        Access-Control-Allow-Origin: *
+        
+        ${gson.toJson(mapOf(
+            "success" to false,
+            "error" to "Error interno del servidor",
+            "message" to e.message
+        ))}
+    """.trimIndent()
+        writer.println(errorResponse)
+        writer.flush()
+    }
+
+    //--------------------------------fin del manejo de solicitudes de registro -----------------------------
     private fun sendJsonResponse(writer: PrintWriter, data: Any) {
         writer.println("HTTP/1.1 200 OK")
         writer.println("Access-Control-Allow-Origin: *")
@@ -1578,12 +1853,19 @@ class SimpleHttpServer(private val port: Int) {
         writer.println(gson.toJson(data))
     }
 
-    private fun sendErrorResponse(writer: PrintWriter, message: String) {
-        writer.println("HTTP/1.1 400 Bad Request")
-        writer.println("Content-Type: application/json")
-        writer.println("Connection: close")
-        writer.println()
-        writer.println(gson.toJson(mapOf("error" to message)))
+    private fun sendErrorResponse(writer: PrintWriter, message: String, statusCode: Int = 400) {
+        val errorResponse = """
+        HTTP/1.1 $statusCode
+        Content-Type: application/json
+        Access-Control-Allow-Origin: *
+        
+        ${gson.toJson(mapOf(
+            "success" to false.toString(),
+            "error" to message
+        ))}
+    """.trimIndent()
+        writer.println(errorResponse)
+        writer.flush()
     }
 
 }
