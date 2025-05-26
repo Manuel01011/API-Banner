@@ -1694,89 +1694,111 @@ class SimpleHttpServer(private val port: Int) {
         try {
             // 1. Obtener la solicitud
             val request = registrationRequestController.getRequestById(requestId)
-                ?: throw IllegalArgumentException("Solicitud no encontrada")
+                ?: throw IllegalArgumentException("Solicitud no encontrada con ID: $requestId")
 
-            // 2. Verificar estado
+            // 2. Verificar que esté pendiente
             if (request.status != "pending") {
-                throw IllegalStateException("La solicitud ya fue procesada")
+                throw IllegalStateException("La solicitud ID $requestId ya fue procesada (estado actual: ${request.status})")
             }
 
-            // 3. Crear usuario
-            userController.insertUser(
+            // 3. Crear el usuario en el sistema
+            val createdUser = userController.insertUser(
                 id = request.user_id,
                 password = request.password,
                 role = request.role
             )
 
-            // 4. Crear entidad según rol
+            // 4. Crear entidad específica según el rol
             when (request.role.lowercase()) {
                 "student" -> {
-                    if (request.name == null || request.tel_number == null ||
-                        request.email == null || request.born_date == null ||
-                        request.career_cod == null) {
-                        throw IllegalArgumentException("Datos incompletos para estudiante")
-                    }
+                    require(request.name != null) { "Nombre requerido para estudiante" }
+                    require(request.tel_number != null) { "Teléfono requerido para estudiante" }
+                    require(request.email != null) { "Email requerido para estudiante" }
+                    require(request.born_date != null) { "Fecha de nacimiento requerida para estudiante" }
+                    require(request.career_cod != null) { "Carrera requerida para estudiante" }
 
                     studentController.insertStudent(
                         id = request.user_id,
-                        name = request.name!!,
-                        telNumber = request.tel_number!!,
-                        email = request.email!!,
-                        bornDate = request.born_date!!,
-                        careerCod = request.career_cod!!,
+                        name = request.name,
+                        telNumber = request.tel_number,
+                        email = request.email,
+                        bornDate = request.born_date,
+                        careerCod = request.career_cod,
                         password = request.password
                     )
                 }
                 "teacher" -> {
-                    if (request.name == null || request.tel_number == null || request.email == null) {
-                        throw IllegalArgumentException("Datos incompletos para profesor")
-                    }
+                    require(request.name != null) { "Nombre requerido para profesor" }
+                    require(request.tel_number != null) { "Teléfono requerido para profesor" }
+                    require(request.email != null) { "Email requerido para profesor" }
 
                     teacherController.insertTeacher(
                         id = request.user_id,
-                        name = request.name!!,
-                        telNumber = request.tel_number!!,
-                        email = request.email!!,
+                        name = request.name,
+                        telNumber = request.tel_number,
+                        email = request.email,
                         password = request.password
                     )
                 }
-                // admin/matriculador no requieren entidades adicionales
+                "admin", "matriculador" -> {
+                    // No se requieren datos adicionales para estos roles
+                }
+                else -> throw IllegalArgumentException("Rol no válido: ${request.role}")
             }
 
-            // 5. Actualizar estado
+            // 5. Actualizar estado de la solicitud
             registrationRequestController.updateRequestStatus(requestId, "approved")
 
-            // 6. Enviar respuesta JSON bien formada
-            val response = mapOf(
+            // 6. Preparar respuesta exitosa
+            val responseData = mapOf(
                 "success" to true,
-                "message" to "Usuario creado exitosamente",
+                "message" to "Solicitud aprobada exitosamente",
                 "data" to mapOf(
+                    "requestId" to requestId,
                     "userId" to request.user_id,
                     "role" to request.role,
-                    "requestId" to requestId
+                    "status" to "approved"
                 )
             )
 
-            sendJsonResponse(writer, 200, response)
+            // 7. Enviar respuesta HTTP
+            sendCompleteResponse(writer, 200, responseData)
 
         } catch (e: IllegalArgumentException) {
-            sendJsonResponse(writer, 400, mapOf(
+            sendCompleteResponse(writer, 400, mapOf(
                 "success" to false,
                 "error" to "Datos inválidos",
-                "message" to e.message
+                "message" to e.message.toString()
             ))
         } catch (e: IllegalStateException) {
-            sendJsonResponse(writer, 409, mapOf(
+            sendCompleteResponse(writer, 409, mapOf(
                 "success" to false,
-                "error" to "Estado inválido",
-                "message" to e.message
+                "error" to "Conflicto de estado",
+                "message" to e.message.toString()
             ))
         } catch (e: Exception) {
-            sendJsonResponse(writer, 500, mapOf(
+            sendCompleteResponse(writer, 500, mapOf(
                 "success" to false,
-                "error" to "Error interno",
-                "message" to "Error al procesar la solicitud: ${e.message ?: "Error desconocido"}"
+                "error" to "Error interno del servidor",
+                "message" to "Ocurrió un error al procesar la solicitud: ${e.message ?: "Error desconocido"}"
             ))
+            e.printStackTrace()
+        }
+    }
+
+    private fun sendCompleteResponse(writer: PrintWriter, statusCode: Int, data: Map<String, Any>) {
+        try {
+            writer.println("HTTP/1.1 $statusCode")
+            writer.println("Content-Type: application/json; charset=utf-8")
+            writer.println("Access-Control-Allow-Origin: *")
+            writer.println("Access-Control-Allow-Methods: *")
+            writer.println("Access-Control-Allow-Headers: *")
+            writer.println("Connection: close")
+            writer.println()
+            writer.println(Gson().toJson(data))
+            writer.flush()
+        } catch (e: Exception) {
+            println("Error al enviar respuesta: ${e.message}")
             e.printStackTrace()
         }
     }
